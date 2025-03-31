@@ -1,57 +1,69 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { doc, getDoc } from "firebase/firestore"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { db } from "@/lib/firebase/config"
-import type { Service } from "@/types/service"
-import type { UserData } from "@/lib/auth/auth-provider"
-import { useAuth } from "@/lib/auth/auth-provider"
-import { Loader2, Clock, RotateCcw, CheckCircle, ArrowLeft } from "lucide-react"
-import { ServiceRequestForm } from "@/components/services/service-request-form"
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { doc, getDoc } from "firebase/firestore";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { db } from "@/lib/firebase/config";
+import type { Service } from "@/types/service";
+import type { UserData } from "@/lib/auth/auth-provider";
+import { useAuth } from "@/lib/auth/auth-provider";
+import { Loader2, Clock, RotateCcw, CheckCircle, ArrowLeft } from "lucide-react";
+import { ServiceRequestForm } from "@/components/services/service-request-form";
 
-export default function ServiceDetailPage({ params }: { params: { id: string } }) {
-  const [service, setService] = useState<Service | null>(null)
-  const [serviceOwner, setServiceOwner] = useState<UserData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [activeImageIndex, setActiveImageIndex] = useState(0)
-  const [showRequestForm, setShowRequestForm] = useState(false)
-  const { user, userData } = useAuth()
-  const router = useRouter()
-  const { id } = params
+export default function ServiceDetailPage() {
+  const [service, setService] = useState<Service | null>(null);
+  const [serviceOwner, setServiceOwner] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const { user, userData } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const [id, setId] = useState<string | null>(null);
 
   useEffect(() => {
+    async function fetchParams() {
+      const resolvedParams = await params;
+      setId(resolvedParams.id);
+    }
+
+    fetchParams();
+  }, [params]);
+
+  useEffect(() => {
+    if (!id) return;
+
     async function fetchServiceDetails() {
       try {
-        const serviceDoc = await getDoc(doc(db, "services", id))
+        const serviceDoc = await getDoc(doc(db, "services", id));
 
         if (!serviceDoc.exists()) {
-          router.push("/services")
-          return
+          router.push("/services");
+          return;
         }
 
-        const serviceData = { id: serviceDoc.id, ...serviceDoc.data() } as Service
-        setService(serviceData)
+        const serviceData = { id: serviceDoc.id, ...serviceDoc.data() } as Service;
+        setService(serviceData);
 
         // Fetch service owner details
-        const ownerDoc = await getDoc(doc(db, "users", serviceData.userId))
+        const ownerDoc = await getDoc(doc(db, "users", serviceData.userId));
         if (ownerDoc.exists()) {
-          setServiceOwner(ownerDoc.data() as UserData)
+          setServiceOwner(ownerDoc.data() as UserData);
         }
       } catch (error) {
-        console.error("Error fetching service details:", error)
+        console.error("Error fetching service details:", error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     }
 
-    fetchServiceDetails()
-  }, [id, router])
+    fetchServiceDetails();
+  }, [id, router]);
 
   if (isLoading) {
     return (
@@ -61,7 +73,7 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
           <h2 className="text-xl font-semibold">Loading service details...</h2>
         </div>
       </div>
-    )
+    );
   }
 
   if (!service) {
@@ -77,11 +89,11 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
-  const isOwnService = user?.uid === service.userId
-  const isClient = userData?.role === "client"
+  const isOwnService = user?.uid === service.userId;
+  const isClient = userData?.role === "client";
 
   return (
     <div className="container py-8">
@@ -131,10 +143,6 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
 
           {/* Service Details */}
           <div className="mb-8">
-            <div className="flex flex-wrap gap-2 mb-3">
-              <Badge variant="secondary">{service.category}</Badge>
-              <Badge variant="outline">{service.subcategory}</Badge>
-            </div>
             <h1 className="text-3xl font-bold mb-4">{service.title}</h1>
 
             <Tabs defaultValue="description" className="mt-6">
@@ -143,13 +151,11 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
                 <TabsTrigger value="requirements">Requirements</TabsTrigger>
               </TabsList>
               <TabsContent value="description" className="mt-4">
-                <div className="prose dark:prose-invert max-w-none">
-                  <p className="whitespace-pre-line">{service.description}</p>
-                </div>
+                <p className="whitespace-pre-line">{service.description}</p>
               </TabsContent>
               <TabsContent value="requirements" className="mt-4">
                 <h3 className="text-lg font-semibold mb-3">What I need from you</h3>
-                {service.requirements && service.requirements.length > 0 ? (
+                {service.requirements?.length > 0 ? (
                   <ul className="space-y-2">
                     {service.requirements.map((req, index) => (
                       <li key={index} className="flex items-start">
@@ -164,18 +170,6 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
               </TabsContent>
             </Tabs>
           </div>
-
-          {/* Skills */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold mb-3">Skills</h3>
-            <div className="flex flex-wrap gap-2">
-              {service.skills.map((skill, index) => (
-                <Badge key={index} variant="outline">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="space-y-6">
@@ -186,31 +180,11 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
                 <span>${service.price.amount}</span>
                 <span className="text-base font-normal text-muted-foreground">per {service.price.unit}</span>
               </CardTitle>
-              <CardDescription>
-                {service.deliveryTime} day{service.deliveryTime !== 1 && "s"} delivery
-              </CardDescription>
+              <CardDescription>{service.deliveryTime} days delivery</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center">
-                <Clock className="h-5 w-5 mr-2 text-muted-foreground" />
-                <span>
-                  {service.deliveryTime} day{service.deliveryTime !== 1 && "s"} delivery
-                </span>
-              </div>
-              <div className="flex items-center">
-                <RotateCcw className="h-5 w-5 mr-2 text-muted-foreground" />
-                <span>
-                  {service.revisions} revision{service.revisions !== 1 && "s"}
-                </span>
-              </div>
-            </CardContent>
             <CardFooter>
               {isOwnService ? (
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => router.push(`/dashboard/services/edit/${service.id}`)}
-                >
+                <Button className="w-full" variant="outline" onClick={() => router.push(`/dashboard/services/edit/${service.id}`)}>
                   Edit Your Service
                 </Button>
               ) : (
@@ -220,44 +194,11 @@ export default function ServiceDetailPage({ params }: { params: { id: string } }
               )}
             </CardFooter>
           </Card>
-
-          {/* Service Provider Card */}
-          {serviceOwner && (
-            <Card>
-              <CardHeader>
-                <CardTitle>About the Seller</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={serviceOwner.photoURL || ""} alt={serviceOwner.displayName || "User"} />
-                    <AvatarFallback>
-                      {serviceOwner.displayName ? serviceOwner.displayName.charAt(0).toUpperCase() : "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold">{serviceOwner.displayName}</h3>
-                    <p className="text-sm text-muted-foreground">Freelancer</p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => router.push(`/freelancers/${service.userId}`)}
-                >
-                  View Profile
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
 
       {/* Service Request Form Modal */}
-      {showRequestForm && (
-        <ServiceRequestForm service={service} serviceOwner={serviceOwner} onClose={() => setShowRequestForm(false)} />
-      )}
+      {showRequestForm && <ServiceRequestForm service={service} serviceOwner={serviceOwner} onClose={() => setShowRequestForm(false)} />}
     </div>
-  )
+  );
 }
-

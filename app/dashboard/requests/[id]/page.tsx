@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,7 +41,7 @@ import { ReviewForm } from "@/components/reviews/review-form"
 import { PaymentForm } from "@/components/payments/payment-form"
 import { DeliveryForm } from "@/components/delivery/delivery-form"
 
-export default function RequestDetailPage({ params }: { params: { id: string } }) {
+export default function RequestDetailPage() {
   const [request, setRequest] = useState<ServiceRequest | null>(null)
   const [otherParty, setOtherParty] = useState<UserData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,10 +51,11 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const { user, userData } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  const { id } = params
+  const params = useParams()
+  const id = params?.id as string
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !id) return
 
     async function fetchRequestDetails() {
       try {
@@ -132,9 +133,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
       })
     } catch (error) {
       console.error("Error updating request:", error)
-      toast({
-        title: "Error",\
-        description: "Failed to update request status  error)
       toast({
         title: "Error",
         description: "Failed to update request status",
@@ -647,4 +645,3 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     </div>
   )
 }
-
