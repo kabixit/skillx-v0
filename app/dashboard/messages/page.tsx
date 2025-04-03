@@ -63,6 +63,7 @@ export default function MessagesPage() {
   const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showConversationList, setShowConversationList] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,6 +132,10 @@ export default function MessagesPage() {
 
       if (otherPartyDoc.exists()) {
         setOtherParty(otherPartyDoc.data() as UserData);
+      }
+      // On mobile, hide conversation list when a request is selected
+      if (window.innerWidth < 768) {
+        setShowConversationList(false);
       }
     } catch (error) {
       console.error("Error fetching other party details:", error);
@@ -395,13 +400,13 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-6">Messages</h1>
+    <div className="container py-4 md:py-8">
+      <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6 px-2 md:px-0">Messages</h1>
 
       {requests.length === 0 ? (
-        <Card className="text-center p-8">
+        <Card className="text-center p-6 md:p-8">
           <CardContent>
-            <h2 className="text-xl font-semibold mb-2">No Conversations Yet</h2>
+            <h2 className="text-lg md:text-xl font-semibold mb-2">No Conversations Yet</h2>
             <p className="text-muted-foreground mb-4">
               You don't have any active conversations. Start by browsing services or checking your requests.
             </p>
@@ -411,21 +416,42 @@ export default function MessagesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 h-[70vh]">
+        <div className="flex flex-col md:grid md:grid-cols-[300px_1fr] gap-4 md:gap-6 h-[calc(100vh-180px)] md:h-[70vh]">
+          {/* Mobile conversation list toggle */}
+          <div className="md:hidden flex items-center gap-2 px-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowConversationList(!showConversationList)}
+              className="flex items-center gap-2"
+            >
+              {showConversationList ? (
+                <>
+                  <X className="h-4 w-4" />
+                  <span>Hide Conversations</span>
+                </>
+              ) : (
+                <>
+                  <span>Show Conversations</span>
+                </>
+              )}
+            </Button>
+          </div>
+
           {/* Conversations List */}
-          <div className="border rounded-lg overflow-hidden">
+          <div className={`${showConversationList ? 'block' : 'hidden'} md:block border rounded-lg overflow-hidden`}>
             <div className="p-3 bg-muted font-medium">Conversations</div>
-            <div className="overflow-y-auto h-[calc(70vh-40px)]">
+            <div className="overflow-y-auto h-[calc(100vh-250px)] md:h-[calc(70vh-40px)]">
               {requests.map((request) => (
                 <div
                   key={request.id}
-                  className={`p-4 border-b cursor-pointer hover:bg-accent transition-colors ${
+                  className={`p-3 md:p-4 border-b cursor-pointer hover:bg-accent transition-colors ${
                     activeRequest?.id === request.id ? "bg-accent" : ""
                   }`}
                   onClick={() => handleSelectRequest(request)}
                 >
-                  <div className="font-medium line-clamp-1">{request.serviceName}</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="font-medium line-clamp-1 text-sm md:text-base">{request.serviceName}</div>
+                  <div className="text-xs md:text-sm text-muted-foreground">
                     {userData?.role === "client" ? `To: ${request.serviceOwnerId}` : `From: ${request.clientName}`}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">{formatDate(request.updatedAt)}</div>
@@ -435,19 +461,29 @@ export default function MessagesPage() {
           </div>
 
           {/* Messages */}
-          <div className="border rounded-lg overflow-hidden flex flex-col">
+          <div className="border rounded-lg overflow-hidden flex flex-col h-full">
             {activeRequest ? (
               <>
                 {/* Header */}
-                <div className="p-4 border-b bg-muted">
-                  <div className="font-medium">{activeRequest.serviceName}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {otherParty ? `Chatting with ${otherParty.displayName}` : "Loading..."}
+                <div className="p-3 md:p-4 border-b bg-muted flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-sm md:text-base">{activeRequest.serviceName}</div>
+                    <div className="text-xs md:text-sm text-muted-foreground">
+                      {otherParty ? `Chatting with ${otherParty.displayName}` : "Loading..."}
+                    </div>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="md:hidden"
+                    onClick={() => setShowConversationList(true)}
+                  >
+                    Switch
+                  </Button>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4">
                   {messages.length === 0 ? (
                     <div className="text-center text-muted-foreground py-8">
                       No messages yet. Start the conversation!
@@ -459,12 +495,12 @@ export default function MessagesPage() {
                         className={`flex ${message.senderId === user?.uid ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[70%] ${
+                          className={`max-w-[85%] md:max-w-[70%] ${
                             message.senderId === user?.uid ? "bg-primary text-primary-foreground" : "bg-muted"
-                          } rounded-lg p-3`}
+                          } rounded-lg p-2 md:p-3`}
                         >
                           <div className="flex items-center gap-2 mb-1">
-                            <Avatar className="h-6 w-6">
+                            <Avatar className="h-5 w-5 md:h-6 md:w-6">
                               <AvatarImage src={message.senderAvatar || ""} alt={message.senderName} />
                               <AvatarFallback>
                                 {message.senderName ? message.senderName.charAt(0).toUpperCase() : "U"}
@@ -472,7 +508,7 @@ export default function MessagesPage() {
                             </Avatar>
                             <span className="text-xs font-medium">{message.senderName}</span>
                           </div>
-                          {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
+                          {message.content && <div className="whitespace-pre-wrap text-sm md:text-base">{message.content}</div>}
                           {renderFileMessage(message)}
                           <div className="text-xs opacity-70 text-right mt-1">{formatDate(message.timestamp)}</div>
                         </div>
@@ -483,7 +519,7 @@ export default function MessagesPage() {
                 </div>
 
                 {/* Input */}
-                <div className="p-4 border-t relative">
+                <div className="p-2 md:p-4 border-t relative">
                   {filePreviews.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-2">
                       {filePreviews.map((preview, index) => renderFilePreview(preview, index))}
@@ -496,26 +532,26 @@ export default function MessagesPage() {
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         disabled={isSending || isUploading}
-                        className="pr-20"
+                        className="pr-16 md:pr-20 text-sm md:text-base"
                       />
                       <div className="absolute right-2 flex space-x-1">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary"
+                          className="h-7 w-7 md:h-8 md:w-8 rounded-full text-muted-foreground hover:text-primary"
                           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                         >
-                          <Smile className="h-4 w-4" />
+                          <Smile className="h-3 w-3 md:h-4 md:w-4" />
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 rounded-full text-muted-foreground hover:text-primary"
+                          className="h-7 w-7 md:h-8 md:w-8 rounded-full text-muted-foreground hover:text-primary"
                           onClick={handleUploadClick}
                         >
-                          <Paperclip className="h-4 w-4" />
+                          <Paperclip className="h-3 w-3 md:h-4 md:w-4" />
                         </Button>
                         <input
                           type="file"
@@ -530,8 +566,8 @@ export default function MessagesPage() {
                         <div ref={emojiPickerRef} className="absolute bottom-12 right-0 z-10 shadow-lg">
                           <EmojiPicker 
                             onEmojiClick={onEmojiClick} 
-                            width={300}
-                            height={350}
+                            width={280}
+                            height={320}
                             previewConfig={{
                               showPreview: false
                             }}
@@ -543,20 +579,28 @@ export default function MessagesPage() {
                     </div>
                     <Button 
                       type="submit" 
+                      size="sm"
+                      className="h-9 md:h-10"
                       disabled={isSending || isUploading || (!newMessage.trim() && filePreviews.length === 0)}
                     >
                       {isSending || isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" />
                       ) : (
-                        <Send className="h-4 w-4" />
+                        <Send className="h-3 w-3 md:h-4 md:w-4" />
                       )}
                     </Button>
                   </form>
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                Select a conversation to start messaging
+              <div className="flex items-center justify-center h-full text-muted-foreground p-4 text-center">
+                {window.innerWidth < 768 ? (
+                  <Button onClick={() => setShowConversationList(true)}>
+                    Select a conversation
+                  </Button>
+                ) : (
+                  "Select a conversation to start messaging"
+                )}
               </div>
             )}
           </div>
