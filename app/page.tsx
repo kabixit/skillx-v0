@@ -6,9 +6,9 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="container z-40 bg-background">
-        <div className="flex h-20 items-center justify-between py-6">
+        <div className="flex h-20 items-center justify-between py-6 pl-3.5">
           <MainNav />
-          <nav className="flex items-center space-x-2">
+          <nav className="flex items-center space-x-2 pr-3.5">
             <Link href="/sign-in">
               <Button variant="ghost" size="sm">
                 Sign In
@@ -56,7 +56,7 @@ export default function Home() {
       </main>
       <footer className="border-t py-6 md:py-8">
         <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
-          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
+          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left pl-3.5">
             &copy; {new Date().getFullYear()} SkillX. All rights reserved.
           </p>
         </div>

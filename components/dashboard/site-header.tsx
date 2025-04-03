@@ -1,5 +1,4 @@
 import Link from "next/link"
-
 import { MobileNav } from "@/components/dashboard/mobile-nav"
 import { UserAccountNav } from "@/components/dashboard/user-account-nav"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -10,13 +9,13 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background">
       <div className="container flex h-16 items-center space-x-4 justify-between">
-        <Link href="/" className="font-bold text-xl">
+        <Link href="/" className="font-bold text-xl pl-3.5">
           SkillX
         </Link>
         <div className="flex-1 max-w-md mx-4 hidden md:block">
           <SearchBar />
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 pr-3.5">
           <NotificationBell />
           <ModeToggle />
           <UserAccountNav />
@@ -26,4 +25,3 @@ export function SiteHeader() {
     </header>
   )
 }
-
