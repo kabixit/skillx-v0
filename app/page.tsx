@@ -6,57 +6,64 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="container z-40 bg-background">
-        <div className="flex h-20 items-center justify-between py-6 pl-3.5">
+        <div className="flex h-20 items-center justify-between py-6 px-4 sm:px-6">
           <MainNav />
-          <nav className="flex items-center space-x-2 pr-3.5">
+          <nav className="flex items-center space-x-2">
             <Link href="/sign-in">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="text-sm sm:text-base">
                 Sign In
               </Button>
             </Link>
             <Link href="/sign-up">
-              <Button size="sm">Sign Up</Button>
+              <Button size="sm" className="text-sm sm:text-base">Sign Up</Button>
             </Link>
           </nav>
         </div>
       </header>
+      
       <main className="flex-1">
-        <section className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32">
+        {/* Hero Section */}
+        <section className="space-y-6 pb-8 pt-6 md:pb-12 md:pt-10 lg:py-32 px-4 sm:px-6">
           <div className="container flex max-w-[64rem] flex-col items-center gap-4 text-center">
-            <h1 className="text-3xl font-bold leading-tight tracking-tighter md:text-5xl lg:text-6xl">
+            <h1 className="text-3xl font-bold leading-tight tracking-tighter sm:text-4xl md:text-5xl lg:text-6xl">
               Exchange Skills, Build Together
             </h1>
-            <p className="max-w-[42rem] leading-normal text-muted-foreground sm:text-xl sm:leading-8">
+            <p className="max-w-[42rem] leading-normal text-muted-foreground text-sm sm:text-base sm:leading-7 md:text-xl md:leading-8">
               SkillX is where talented freelancers exchange services, collaborate on projects, and grow their networks
               without traditional payment barriers.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Link href="/sign-up">
-                <Button size="lg">Get Started</Button>
+                <Button size="lg" className="w-full sm:w-auto">Get Started</Button>
               </Link>
               <Link href="/explore">
-                <Button variant="outline" size="lg">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto">
                   Explore Skills
                 </Button>
               </Link>
             </div>
           </div>
         </section>
-        <section className="container space-y-6 py-8 md:py-12 lg:py-24">
-          <div className="mx-auto grid gap-8 sm:max-w-4xl sm:grid-cols-2 md:grid-cols-3">
+
+        {/* Features Section */}
+        <section className="container space-y-6 py-8 md:py-12 lg:py-24 px-4 sm:px-6">
+          <div className="mx-auto grid gap-6 sm:max-w-4xl sm:grid-cols-2 md:grid-cols-3">
             {features.map((feature) => (
               <div key={feature.title} className="flex flex-col items-center space-y-2 rounded-lg border p-4">
                 <div className="rounded-full bg-primary/10 p-2">{feature.icon}</div>
-                <h3 className="text-xl font-bold">{feature.title}</h3>
-                <p className="text-center text-muted-foreground">{feature.description}</p>
+                <h3 className="text-lg font-bold sm:text-xl">{feature.title}</h3>
+                <p className="text-center text-muted-foreground text-sm sm:text-base">
+                  {feature.description}
+                </p>
               </div>
             ))}
           </div>
         </section>
       </main>
-      <footer className="border-t py-6 md:py-8">
+
+      <footer className="border-t py-6 md:py-8 px-4 sm:px-6">
         <div className="container flex flex-col items-center justify-between gap-4 md:flex-row">
-          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left pl-3.5">
+          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
             &copy; {new Date().getFullYear()} SkillX. All rights reserved.
           </p>
         </div>
@@ -127,4 +134,3 @@ const features = [
     ),
   },
 ]
-

@@ -128,7 +128,7 @@ export default function FreelancersPage() {
   })
 
   return (
-    <div className="container py-8">
+    <div className="container py-8 pr-8 pl-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Find Freelancers</h1>
         <p className="text-muted-foreground">Connect with skilled professionals for your projects</p>

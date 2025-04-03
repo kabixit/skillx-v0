@@ -143,7 +143,7 @@ export default function ServicesPage() {
   })
 
   return (
-    <div className="container py-8">
+    <div className="container py-8 pl-8 pr-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Browse Services</h1>
         <p className="text-muted-foreground">Find the perfect service for your needs</p>
