@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@firebase/storage": "^0.13.7",
     "@hookform/resolvers": "latest",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -43,6 +44,7 @@
     "cmdk": "1.0.4",
     "date-fns": "latest",
     "embla-carousel-react": "8.5.1",
+    "emoji-picker-react": "^4.12.2",
     "firebase": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
