@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { collection, addDoc, serverTimestamp, doc, updateDoc } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, increment } from "firebase/firestore"
 
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -49,11 +49,20 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !userData) return
 
+    // Check if paying with credits and has enough balance
+    if (values.paymentMethod === "credits") {
+      if (userData.credits < request.budget) {
+        toast({
+          title: "Insufficient credits",
+          description: "You don't have enough credits to complete this payment",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     setIsLoading(true)
     try {
-      // In a real app, you would process the payment with a payment provider here
-      // For this demo, we'll simulate a successful payment
-
       // Create a transaction record
       const transactionData = {
         userId: user.uid,
@@ -70,12 +79,33 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
 
       const transactionRef = await addDoc(collection(db, "transactions"), transactionData)
 
+      // Create a batch to handle all updates atomically
+      const batch = writeBatch(db)
+
       // Update the request with payment information
-      await updateDoc(doc(db, "requests", request.id), {
+      const requestRef = doc(db, "requests", request.id)
+      batch.update(requestRef, {
         paymentStatus: "paid",
         paymentId: transactionRef.id,
         updatedAt: serverTimestamp(),
       })
+
+      if (values.paymentMethod === "credits") {
+        // Deduct from client's credits
+        const clientRef = doc(db, "users", user.uid)
+        batch.update(clientRef, {
+          credits: increment(-request.budget)
+        })
+      }
+
+      // Add to freelancer's credits (regardless of payment method)
+      const freelancerRef = doc(db, "users", request.serviceOwnerId)
+      batch.update(freelancerRef, {
+        credits: increment(request.budget)
+      })
+
+      // Commit all updates
+      await batch.commit()
 
       // Create a notification for the freelancer
       await addDoc(collection(db, "notifications"), {
@@ -101,7 +131,7 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
       console.error(error)
       toast({
         title: "Payment failed",
-        description: error.message,
+        description: error.message || "An error occurred while processing your payment",
         variant: "destructive",
       })
     } finally {
@@ -173,10 +203,18 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
                           </label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="credits" id="credits" />
-                          <label htmlFor="credits" className="flex items-center cursor-pointer">
+                          <RadioGroupItem 
+                            value="credits" 
+                            id="credits" 
+                            disabled={userData?.credits < request.budget}
+                          />
+                          <label 
+                            htmlFor="credits" 
+                            className={`flex items-center cursor-pointer ${userData?.credits < request.budget ? 'opacity-50' : ''}`}
+                          >
                             <Wallet className="h-4 w-4 mr-2" />
                             SkillX Credits ({userData?.credits || 0} available)
+                            {userData?.credits < request.budget && " (Insufficient)"}
                           </label>
                         </div>
                       </RadioGroup>
@@ -256,4 +294,3 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
     </Dialog>
   )
 }
-

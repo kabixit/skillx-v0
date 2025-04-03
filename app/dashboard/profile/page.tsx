@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -10,12 +10,44 @@ import { useAuth } from "@/lib/auth/auth-provider"
 import { db } from "@/lib/firebase/config"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Profile as UserProfile } from "@/types/user"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useToast } from "@/components/ui/use-toast"
+
+// Updated valid certificate codes
+const VALID_CERTIFICATES = {
+  coursera: ["TKTYNBA77AB3", "ZACFTLVD2LQS"],
+  udemy: ["UC-23cd5fbd-52b1-4c2b-b21b-c795fcecf3e7"],
+  aws: ["AWSCERT1", "CLOUD202"],
+  microsoft: ["MSFT123", "AZURE456"],
+}
 
 export default function ProfilePage() {
   const { user, userData, isLoading } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isProfileLoading, setIsProfileLoading] = useState(true)
   const router = useRouter()
+  const { toast } = useToast()
+
+  // Certificate form state
+  const [isAddingCertificate, setIsAddingCertificate] = useState(false)
+  const [certificateProvider, setCertificateProvider] = useState("")
+  const [certificateCode, setCertificateCode] = useState("")
+  const [isVerifying, setIsVerifying] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -43,6 +75,80 @@ export default function ProfilePage() {
 
     loadProfile()
   }, [user])
+
+  const handleAddCertificate = async () => {
+    if (!certificateProvider || !certificateCode) {
+      toast({
+        title: "Error",
+        description: "Please select a provider and enter your certificate code",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsVerifying(true)
+
+    // Add slight delay for better UX
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    try {
+      // Check if the code is valid
+      const validCodes = VALID_CERTIFICATES[certificateProvider as keyof typeof VALID_CERTIFICATES]
+      const isValid = validCodes.includes(certificateCode.toUpperCase())
+
+      if (!isValid) {
+        toast({
+          title: "Invalid Certificate",
+          description: "Please enter a valid certificate code",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Create new certificate object (simplified without issue date)
+      const newCertificate = {
+        name: `${certificateProvider.charAt(0).toUpperCase() + certificateProvider.slice(1)} Certification`,
+        issuer: certificateProvider.charAt(0).toUpperCase() + certificateProvider.slice(1),
+      }
+
+      // Update profile with new certificate
+      const profileDocRef = doc(db, "profiles", user!.uid)
+      const currentCertificates = profile?.certifications || []
+
+      await updateDoc(profileDocRef, {
+        certifications: [...currentCertificates, newCertificate],
+      })
+
+      // Update local state
+      setProfile((prev) => ({
+        ...prev!,
+        certifications: [...currentCertificates, newCertificate],
+      }))
+
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Certificate verified and added successfully!",
+        className: "bg-green-500 text-white",
+      })
+
+      // Reset form and close dialog after a short delay
+      setTimeout(() => {
+        setCertificateProvider("")
+        setCertificateCode("")
+        setIsAddingCertificate(false)
+      }, 1000)
+    } catch (error) {
+      console.error("Error adding certificate:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add certificate. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsVerifying(false)
+    }
+  }
 
   if (isLoading || !user || !userData) {
     return (
@@ -85,7 +191,6 @@ export default function ProfilePage() {
                   {userData.role === "freelancer" ? "Freelancer" : "Client"}
                 </p>
               </div>
-              {/* Verification Badge (if applicable) */}
               {userData.isEmailVerified && (
                 <div className="flex items-center space-x-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 py-1 px-2 rounded-full text-xs">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -243,8 +348,66 @@ export default function ProfilePage() {
                 </Card>
 
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Certifications</CardTitle>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle>Certifications</CardTitle>
+                      <CardDescription>Your professional certifications</CardDescription>
+                    </div>
+                    <Dialog open={isAddingCertificate} onOpenChange={setIsAddingCertificate}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">Add Certificate</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Certificate</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="provider">Certificate Provider</Label>
+                            <Select
+                              value={certificateProvider}
+                              onValueChange={setCertificateProvider}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select provider" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="coursera">Coursera</SelectItem>
+                                <SelectItem value="udemy">Udemy</SelectItem>
+                                <SelectItem value="aws">AWS</SelectItem>
+                                <SelectItem value="microsoft">Microsoft</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="code">Certificate Code</Label>
+                            <Input
+                              id="code"
+                              placeholder="Enter your certificate code"
+                              value={certificateCode}
+                              onChange={(e) => setCertificateCode(e.target.value)}
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              Enter the verification code from your certificate
+                            </p>
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => setIsAddingCertificate(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={handleAddCertificate}
+                              disabled={isVerifying || !certificateProvider || !certificateCode}
+                            >
+                              {isVerifying ? "Verifying..." : "Add Certificate"}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </CardHeader>
                   <CardContent>
                     {isProfileLoading ? (
@@ -258,20 +421,6 @@ export default function ProfilePage() {
                           <div key={index} className="border-b pb-4 last:border-0 last:pb-0">
                             <h4 className="font-medium">{cert.name}</h4>
                             <p className="text-sm">Issued by {cert.issuer}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Issued: {cert.issueDate}
-                              {cert.expiryDate && ` • Expires: ${cert.expiryDate}`}
-                            </p>
-                            {cert.credentialUrl && (
-                              <a
-                                href={cert.credentialUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-1 text-xs text-blue-600 hover:underline inline-block"
-                              >
-                                View Credential
-                              </a>
-                            )}
                           </div>
                         ))}
                       </div>
@@ -300,4 +449,3 @@ export default function ProfilePage() {
     </div>
   )
 }
-
