@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, increment } from "firebase/firestore"
-
+import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, increment, setDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -49,89 +48,104 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !userData) return
 
-    // Check if paying with credits and has enough balance
-    if (values.paymentMethod === "credits") {
-      if (userData.credits < request.budget) {
-        toast({
-          title: "Insufficient credits",
-          description: "You don't have enough credits to complete this payment",
-          variant: "destructive",
-        })
-        return
-      }
+    if (values.paymentMethod === "credits" && userData.credits < request.budget) {
+      toast({
+        title: "Insufficient credits",
+        description: "You don't have enough credits to complete this payment",
+        variant: "destructive",
+      })
+      return
     }
 
     setIsLoading(true)
     try {
-      // Create a transaction record
-      const transactionData = {
+      const batch = writeBatch(db)
+
+      // Create escrow account
+      const escrowId = `escrow_${request.id}`
+      const escrowRef = doc(db, "escrowAccounts", escrowId)
+      
+      batch.set(escrowRef, {
+        requestId: request.id,
+        clientId: user.uid,
+        freelancerId: request.serviceOwnerId,
+        amount: request.budget,
+        status: "held",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+
+      // Create payment transaction
+      const paymentToEscrowData = {
         userId: user.uid,
         requestId: request.id,
         serviceId: request.serviceId,
         amount: request.budget,
         currency: "USD",
         status: "completed",
-        type: "payment",
+        type: "payment_to_escrow",
         paymentMethod: values.paymentMethod,
-        description: `Payment for service: ${request.serviceName}`,
+        description: `Payment to escrow for service: ${request.serviceName}`,
         createdAt: serverTimestamp(),
       }
 
-      const transactionRef = await addDoc(collection(db, "transactions"), transactionData)
+      const paymentToEscrowRef = await addDoc(collection(db, "transactions"), paymentToEscrowData)
 
-      // Create a batch to handle all updates atomically
-      const batch = writeBatch(db)
-
-      // Update the request with payment information
+      // Update request
       const requestRef = doc(db, "requests", request.id)
       batch.update(requestRef, {
-        paymentStatus: "paid",
-        paymentId: transactionRef.id,
+        paymentStatus: "in_escrow",
+        paymentId: paymentToEscrowRef.id,
+        escrowId: escrowId,
         updatedAt: serverTimestamp(),
       })
 
       if (values.paymentMethod === "credits") {
-        // Deduct from client's credits
+        // Deduct from client
         const clientRef = doc(db, "users", user.uid)
         batch.update(clientRef, {
           credits: increment(-request.budget)
         })
       }
 
-      // Add to freelancer's credits (regardless of payment method)
-      const freelancerRef = doc(db, "users", request.serviceOwnerId)
-      batch.update(freelancerRef, {
-        credits: increment(request.budget)
-      })
-
-      // Commit all updates
       await batch.commit()
 
-      // Create a notification for the freelancer
-      await addDoc(collection(db, "notifications"), {
-        userId: request.serviceOwnerId,
-        title: "Payment Received",
-        message: `You've received a payment of $${request.budget} for "${request.serviceName}"`,
-        type: "payment",
-        read: false,
-        createdAt: serverTimestamp(),
-        linkTo: `/dashboard/requests/${request.id}`,
-        relatedId: request.id,
-      })
+      // Notifications
+      await Promise.all([
+        addDoc(collection(db, "notifications"), {
+          userId: request.serviceOwnerId,
+          title: "Payment in Escrow",
+          message: `Payment of $${request.budget} for "${request.serviceName}" has been secured`,
+          type: "payment",
+          read: false,
+          createdAt: serverTimestamp(),
+          linkTo: `/dashboard/requests/${request.id}`,
+          relatedId: request.id,
+        }),
+        addDoc(collection(db, "notifications"), {
+          userId: user.uid,
+          title: "Payment Secured",
+          message: `Your payment of $${request.budget} is safely held in escrow`,
+          type: "payment",
+          read: false,
+          createdAt: serverTimestamp(),
+          linkTo: `/dashboard/requests/${request.id}`,
+          relatedId: request.id,
+        })
+      ])
 
       toast({
-        title: "Payment successful!",
-        description: "Your payment has been processed successfully",
+        title: "Payment secured in escrow!",
+        description: "Your payment is safely held until you approve the work",
       })
 
-      // Close the form and refresh if needed
       onClose()
       if (onSuccess) onSuccess()
     } catch (error: any) {
       console.error(error)
       toast({
         title: "Payment failed",
-        description: error.message || "An error occurred while processing your payment",
+        description: error.message || "An error occurred",
         variant: "destructive",
       })
     } finally {
@@ -143,8 +157,10 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Complete Payment</DialogTitle>
-          <DialogDescription>Complete your payment to finalize this service request.</DialogDescription>
+          <DialogTitle>Secure Payment in Escrow</DialogTitle>
+          <DialogDescription>
+            Your payment will be held securely until you approve the work.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="py-4">
@@ -157,6 +173,9 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
             <div className="flex justify-between font-medium text-lg mt-4 pt-4 border-t">
               <span>Total</span>
               <span>${request.budget}</span>
+            </div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              <p>Funds will be released to the freelancer only after you approve the work.</p>
             </div>
           </div>
 
@@ -184,20 +203,9 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="paypal" id="paypal" />
                           <label htmlFor="paypal" className="flex items-center cursor-pointer">
-                            <svg
-                              className="h-4 w-4 mr-2"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M19.5 8.5H18.5C18.5 5.74 16.26 3.5 13.5 3.5H7.5C6.12 3.5 5 4.62 5 6V18C5 19.1 5.9 20 7 20H12C13.66 20 15 18.66 15 17V13.5H19.5C20.88 13.5 22 12.38 22 11V11C22 9.62 20.88 8.5 19.5 8.5Z"
-                                fill="currentColor"
-                              />
-                              <path
-                                d="M15 8.5H16.5C17.05 8.5 17.5 8.95 17.5 9.5V10C17.5 10.55 17.05 11 16.5 11H15V8.5Z"
-                                fill="currentColor"
-                              />
+                            <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M19.5 8.5H18.5C18.5 5.74 16.26 3.5 13.5 3.5H7.5C6.12 3.5 5 4.62 5 6V18C5 19.1 5.9 20 7 20H12C13.66 20 15 18.66 15 17V13.5H19.5C20.88 13.5 22 12.38 22 11V11C22 9.62 20.88 8.5 19.5 8.5Z" fill="currentColor" />
+                              <path d="M15 8.5H16.5C17.05 8.5 17.5 8.95 17.5 9.5V10C17.5 10.55 17.05 11 16.5 11H15V8.5Z" fill="currentColor" />
                             </svg>
                             PayPal
                           </label>
@@ -283,7 +291,7 @@ export function PaymentForm({ request, onClose, onSuccess }: PaymentFormProps) {
                       Processing...
                     </>
                   ) : (
-                    `Pay $${request.budget}`
+                    `Pay $${request.budget} to Escrow`
                   )}
                 </Button>
               </div>

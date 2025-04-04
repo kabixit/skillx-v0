@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -44,7 +42,7 @@ export default function CreateServicePage() {
   const [requirements, setRequirements] = useState<string[]>([])
   const [newRequirement, setNewRequirement] = useState("")
   const [images, setImages] = useState<File[]>([])
-  const [uploadingImages, setUploadingImages] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
   const { user, userData } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -106,30 +104,55 @@ export default function CreateServicePage() {
 
   async function uploadImages() {
     if (images.length === 0) return []
-
-    setUploadingImages(true)
+    
     const imageUrls: string[] = []
-
+    
     try {
       for (const image of images) {
-        const storageRef = ref(storage, `services/${user?.uid}/${Date.now()}_${image.name}`)
+        // Create a unique filename with timestamp and random string
+        const timestamp = Date.now()
+        const randomString = Math.random().toString(36).substring(2, 8)
+        const filename = `${timestamp}_${randomString}_${image.name.replace(/\s+/g, '_')}`
+        
+        const storageRef = ref(storage, `services/${user?.uid}/${filename}`)
+        
+        // Upload the file
         const snapshot = await uploadBytes(storageRef, image)
+        
+        // Get the download URL
         const url = await getDownloadURL(snapshot.ref)
         imageUrls.push(url)
+        
+        // Update progress
+        setUploadProgress(Math.round((imageUrls.length / images.length) * 100))
       }
+      
       return imageUrls
     } catch (error) {
       console.error("Error uploading images:", error)
+      toast({
+        title: "Image upload failed",
+        description: "There was an error uploading your images. Please try again.",
+        variant: "destructive",
+      })
       throw error
     } finally {
-      setUploadingImages(false)
+      setUploadProgress(0)
     }
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to create a service",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsLoading(true)
+    
     try {
       // Upload images first
       const imageUrls = await uploadImages()
@@ -159,9 +182,14 @@ export default function CreateServicePage() {
         status: "active",
         featured: false,
         tags: [...skillsArray, values.category, values.subcategory],
+        createdBy: {
+          uid: user.uid,
+          displayName: userData?.displayName || "",
+          photoURL: userData?.photoURL || "",
+        }
       }
 
-      const serviceRef = await addDoc(collection(db, "services"), serviceData)
+      await addDoc(collection(db, "services"), serviceData)
 
       toast({
         title: "Service created!",
@@ -171,10 +199,10 @@ export default function CreateServicePage() {
       // Navigate to service management
       router.push("/dashboard/services")
     } catch (error: any) {
-      console.error(error)
+      console.error("Service creation error:", error)
       toast({
         title: "Failed to create service",
-        description: error.message,
+        description: error.message || "An unknown error occurred",
         variant: "destructive",
       })
     } finally {
@@ -197,220 +225,7 @@ export default function CreateServicePage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Service Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Professional Logo Design" {...field} />
-                    </FormControl>
-                    <FormDescription>A clear, concise title that describes your service</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Describe your service in detail..." className="min-h-[150px]" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Provide a detailed description of what you offer, your process, and what clients can expect
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {SERVICE_CATEGORIES.map((category) => (
-                            <SelectItem key={category.name} value={category.name}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Choose the category that best fits your service</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="subcategory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Subcategory</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!selectedCategory}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a subcategory" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {selectedCategoryData?.subcategories.map((subcategory) => (
-                            <SelectItem key={subcategory} value={subcategory}>
-                              {subcategory}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>Choose a more specific subcategory</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="price.amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Price</FormLabel>
-                      <FormControl>
-                        <div className="flex">
-                          <span className="inline-flex items-center px-3 border border-r-0 border-input rounded-l-md bg-muted text-muted-foreground">
-                            $
-                          </span>
-                          <Input className="rounded-l-none" placeholder="99.99" {...field} />
-                        </div>
-                      </FormControl>
-                      <FormDescription>Set your price in USD</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="price.unit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Pricing Unit</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select pricing unit" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="hour">Per Hour</SelectItem>
-                          <SelectItem value="project">Per Project</SelectItem>
-                          <SelectItem value="day">Per Day</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>How you want to charge for this service</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="deliveryTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Delivery Time (days)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="1" placeholder="7" {...field} />
-                      </FormControl>
-                      <FormDescription>How many days to complete the service</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="revisions"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Number of Revisions</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" placeholder="3" {...field} />
-                      </FormControl>
-                      <FormDescription>How many revisions you offer</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="skills"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Skills</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. JavaScript, React, UI/UX Design" {...field} />
-                      </FormControl>
-                      <FormDescription>Comma-separated list of relevant skills</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div>
-                <FormLabel>Requirements from Clients</FormLabel>
-                <div className="flex mt-2 mb-4">
-                  <Input
-                    placeholder="What do you need from clients to get started?"
-                    value={newRequirement}
-                    onChange={(e) => setNewRequirement(e.target.value)}
-                    className="mr-2"
-                  />
-                  <Button type="button" onClick={addRequirement} size="sm">
-                    <Plus className="h-4 w-4 mr-1" /> Add
-                  </Button>
-                </div>
-                {requirements.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    {requirements.map((req, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                        <span className="text-sm">{req}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeRequirement(index)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <FormDescription>
-                  List what you need from clients to deliver your service (max 10 items)
-                </FormDescription>
-              </div>
+              {/* ... (keep all your existing form fields exactly as they were) ... */}
 
               <div>
                 <FormLabel>Service Images</FormLabel>
@@ -422,39 +237,62 @@ export default function CreateServicePage() {
                     multiple
                     disabled={images.length >= 5}
                   />
-                  <FormDescription>Upload up to 5 images showcasing your service (max 5MB each)</FormDescription>
+                  <FormDescription>
+                    Upload up to 5 images showcasing your service (max 5MB each)
+                  </FormDescription>
                 </div>
                 {images.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">
-                    {images.map((image, index) => (
-                      <div key={index} className="relative group">
-                        <div className="aspect-square rounded-md overflow-hidden bg-muted">
-                          <img
-                            src={URL.createObjectURL(image) || "/placeholder.svg"}
-                            alt={`Preview ${index}`}
-                            className="w-full h-full object-cover"
+                  <div className="mt-4">
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                      <div className="mb-4">
+                        <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                          <span>Uploading images...</span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all duration-300"
+                            style={{ width: `${uploadProgress}%` }}
                           />
                         </div>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => removeImage(index)}
-                          className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
                       </div>
-                    ))}
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {images.map((image, index) => (
+                        <div key={index} className="relative group">
+                          <div className="aspect-square rounded-md overflow-hidden bg-muted">
+                            <img
+                              src={URL.createObjectURL(image)}
+                              alt={`Preview ${index}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeImage(index)}
+                            className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading || uploadingImages}>
-                {isLoading || uploadingImages ? (
+              <Button type="submit" className="w-full" disabled={isLoading || uploadProgress > 0}>
+                {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {uploadingImages ? "Uploading Images..." : "Creating Service..."}
+                    Creating Service...
+                  </>
+                ) : uploadProgress > 0 ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading Images ({uploadProgress}%)
                   </>
                 ) : (
                   "Create Service"
@@ -467,4 +305,3 @@ export default function CreateServicePage() {
     </div>
   )
 }
-
