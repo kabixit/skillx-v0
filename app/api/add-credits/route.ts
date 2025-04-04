@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from "@/lib/firebase/config"
 import { doc, updateDoc, increment, collection, addDoc } from "firebase/firestore"
 import { getAuth } from "firebase-admin/auth"
-import { initializeFirebaseAdmin } from "@/lib/firebase/admin"
 
-initializeFirebaseAdmin()
 
 export async function POST(request: Request) {
   try {
