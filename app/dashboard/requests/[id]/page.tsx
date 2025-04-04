@@ -172,17 +172,20 @@ export default function RequestDetailPage() {
 
   const handleEscrowAction = async (action: "release" | "refund") => {
     if (!request || !user) {
+      console.error("Error: Request or user not available");
       toast({
         title: "Error",
         description: "Request or user not available",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
-
-    setIsProcessingEscrow(true)
+  
+    setIsProcessingEscrow(true);
+  
     try {
-      const idToken = await user.getIdToken()
+      console.log(`Initiating ${action} for request ${request.id}`);
+      const idToken = await user.getIdToken();
       const response = await fetch('/api/escrow', {
         method: 'POST',
         headers: {
@@ -191,41 +194,44 @@ export default function RequestDetailPage() {
         },
         body: JSON.stringify({
           requestId: request.id,
-          action: action
+          action: action,
         }),
-      })
-
+      });
+  
+      const data = await response.json();
+      console.log('API Response:', data);
+  
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || errorData.message || "Failed to process escrow action")
+        throw new Error(data.message || `Failed to ${action} escrow`);
       }
-
-      const result = await response.json()
-
+  
       // Update local state
       setRequest(prev => ({
         ...prev!,
         paymentStatus: action === "release" ? "paid" : "refunded",
-      }))
-
+      }));
+  
       toast({
         title: "Success",
-        description: result.message || `Escrow ${action} completed successfully`,
-      })
-
-      // Refresh data to ensure consistency
-      await fetchRequestDetails()
+        description: data.message || `Escrow ${action} completed successfully`,
+      });
+  
+      // Refresh data
+      await fetchRequestDetails();
+      console.log(`Successfully processed ${action} for request ${request.id}`);
+  
     } catch (error) {
-      console.error("Error processing escrow:", error)
+      console.error(`Error processing ${action}:`, error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to process escrow action",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsProcessingEscrow(false)
+      setIsProcessingEscrow(false);
     }
-  }
+  };
+  
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -273,8 +279,9 @@ export default function RequestDetailPage() {
     if (!request || !userData) return false
     return (
       userData.role === "freelancer" &&
-      (request.status === "in_progress" || request.status === "revision_requested") &&
+      (request.status === "in_progress" || request.status === "accepted" || request.status === "revision_requested") &&
       (request.paymentStatus === "paid" || request.paymentStatus === "in_escrow")
+      
     )
   }
 

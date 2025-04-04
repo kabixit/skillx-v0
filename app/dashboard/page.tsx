@@ -18,6 +18,17 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { toast } from "@/components/ui/use-toast"
+import { ethers } from "ethers"
 
 type Service = {
   id: string
@@ -34,6 +45,7 @@ type Service = {
   category: string
   subcategory: string
   images: string[]
+  userId: string
 }
 
 type Request = {
@@ -43,7 +55,7 @@ type Request = {
   clientId: string
   clientName: string
   serviceOwnerId: string
-  status: 'pending' | 'accepted' | 'rejected' | 'completed'
+  status: 'pending' | 'accepted' | 'rejected' | 'completed' | 'in_escrow'
   createdAt: Date
   updatedAt: Date
   budget: number
@@ -56,7 +68,7 @@ type Request = {
 type Transaction = {
   id: string
   amount: number
-  type: 'payment' | 'payout' | 'refund'
+  type: 'payment' | 'payout' | 'refund' | 'credit_purchase'
   description: string
   createdAt: Date
   currency: string
@@ -64,6 +76,7 @@ type Transaction = {
   status: string
   requestId?: string
   serviceId?: string
+  transactionHash?: string
 }
 
 export default function Dashboard() {
@@ -73,6 +86,15 @@ export default function Dashboard() {
   const [requests, setRequests] = useState<Request[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loadingData, setLoadingData] = useState(true)
+  const [isMetaMaskDialogOpen, setIsMetaMaskDialogOpen] = useState(false)
+  const [creditAmount, setCreditAmount] = useState(10)
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  const [hasMetaMask, setHasMetaMask] = useState(false)
+
+  useEffect(() => {
+    // Check if MetaMask is installed
+    setHasMetaMask(typeof window !== 'undefined' && !!window.ethereum?.isMetaMask)
+  }, [])
 
   useEffect(() => {
     if (!isLoading && (!user || !userData)) {
@@ -87,7 +109,6 @@ export default function Dashboard() {
       try {
         setLoadingData(true)
         
-        // Fetch transactions
         const transactionsQuery = query(
           collection(db, "transactions"),
           where("userId", "==", user.uid),
@@ -103,7 +124,6 @@ export default function Dashboard() {
         setTransactions(transactionsData)
 
         if (userData.role === 'freelancer') {
-          // Freelancer-specific data
           const servicesQuery = query(
             collection(db, "services"),
             where("userId", "==", user.uid),
@@ -133,7 +153,6 @@ export default function Dashboard() {
           })) as Request[]
           setRequests(requestsData)
         } else {
-          // Client-specific data
           const requestsQuery = query(
             collection(db, "requests"),
             where("clientId", "==", user.uid),
@@ -159,29 +178,42 @@ export default function Dashboard() {
     fetchDashboardData()
   }, [user, userData])
 
-  if (isLoading || loadingData) {
-    return (
-      <div className="p-6 space-y-6">
-        <Skeleton className="h-8 w-1/4" />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-1/2" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-full mt-2" />
-                <Skeleton className="h-4 w-3/4 mt-2" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Skeleton className="h-64 w-full" />
-      </div>
-    )
+  const handleAddCredits = () => {
+    if (!hasMetaMask) {
+      toast({
+        title: "MetaMask not found",
+        description: "Please install MetaMask to add credits",
+        variant: "destructive",
+      })
+      return
+    }
+    setIsMetaMaskDialogOpen(true)
   }
 
-  if (!user || !userData) return null
+  const processMetaMaskPayment = async () => {
+    setIsProcessingPayment(true)
+    
+    try {
+      // This will open MetaMask by requesting accounts
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      await provider.send("eth_requestAccounts", [])
+      
+      toast({
+        title: "MetaMask opened",
+        description: "You can now proceed with payment",
+      })
+    } catch (error) {
+      console.error("Error opening MetaMask:", error)
+      toast({
+        title: "Error",
+        description: "Failed to open MetaMask. Please ensure it's installed and try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessingPayment(false)
+      setIsMetaMaskDialogOpen(false)
+    }
+  }
 
   const getRequestStatusBadge = (status: string) => {
     switch (status) {
@@ -218,15 +250,95 @@ export default function Dashboard() {
     }).format(amount)
   }
 
+  if (isLoading || loadingData) {
+    return (
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-8 w-1/4" />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full mt-2" />
+                <Skeleton className="h-4 w-3/4 mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
+
+  if (!user || !userData) return null
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Welcome back, {userData.displayName}</h1>
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">Credits:</span>
-          <span className="text-lg font-bold">{userData.credits}</span>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm text-muted-foreground">Credits:</span>
+            <span className="text-lg font-bold">{userData.credits || 0}</span>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={handleAddCredits}
+            disabled={!hasMetaMask}
+          >
+            Add Credits
+          </Button>
         </div>
       </div>
+
+      <Dialog open={isMetaMaskDialogOpen} onOpenChange={setIsMetaMaskDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Credits</DialogTitle>
+            <DialogDescription>
+              Add credits to your account using MetaMask
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="amount">Amount</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="amount"
+                  type="number"
+                  min="1"
+                  value={creditAmount}
+                  onChange={(e) => setCreditAmount(Number(e.target.value))}
+                />
+                <span>credits</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center p-4 border rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Image
+                  src="/metamask-icon.png"
+                  alt="MetaMask"
+                  width={24}
+                  height={24}
+                />
+                <span>MetaMask</span>
+              </div>
+            </div>
+
+            <Button 
+              className="w-full" 
+              onClick={processMetaMaskPayment}
+              disabled={isProcessingPayment}
+            >
+              {isProcessingPayment ? "Opening..." : "Pay with MetaMask"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

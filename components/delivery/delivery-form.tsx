@@ -92,13 +92,13 @@ export function DeliveryForm({ request, onClose, onSuccess }: DeliveryFormProps)
 
     setIsLoading(true)
     try {
-      // Upload delivery files
-      const fileUrls = await uploadFiles()
+      // Upload delivery files if any
+      const fileUrls = deliveryFiles.length > 0 ? await uploadFiles() : []
 
       // Update the request status to delivered
       await updateDoc(doc(db, "requests", request.id), {
         status: "delivered",
-        deliveryFiles: fileUrls,
+        ...(fileUrls.length > 0 && { deliveryFiles: fileUrls }), // Only add deliveryFiles if there are any
         updatedAt: serverTimestamp(),
       })
 
@@ -176,7 +176,7 @@ export function DeliveryForm({ request, onClose, onSuccess }: DeliveryFormProps)
             />
 
             <div>
-              <FormLabel>Delivery Files</FormLabel>
+              <FormLabel>Delivery Files (Optional)</FormLabel>
               <div className="mt-2">
                 <Input type="file" onChange={handleFileChange} multiple disabled={deliveryFiles.length >= 10} />
                 <FormDescription>Upload up to 10 files (max 25MB each)</FormDescription>
@@ -208,7 +208,7 @@ export function DeliveryForm({ request, onClose, onSuccess }: DeliveryFormProps)
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading || uploadingFiles || deliveryFiles.length === 0}>
+              <Button type="submit" disabled={isLoading || uploadingFiles}>
                 {isLoading || uploadingFiles ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -225,4 +225,3 @@ export function DeliveryForm({ request, onClose, onSuccess }: DeliveryFormProps)
     </Dialog>
   )
 }
-

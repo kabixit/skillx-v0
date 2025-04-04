@@ -54,7 +54,7 @@ export interface ServiceRequest {
     timestamp: any
   }[]
   deliveryFiles?: string[]
-  paymentStatus?: "pending" | "paid" | "refunded"
+  paymentStatus?: "pending" | "paid" | "refunded" | "in_escrow"
   paymentId?: string
   reviewId?: string
 }
