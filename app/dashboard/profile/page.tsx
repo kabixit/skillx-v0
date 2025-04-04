@@ -30,7 +30,7 @@ import { useToast } from "@/components/ui/use-toast"
 
 // Updated valid certificate codes
 const VALID_CERTIFICATES = {
-  coursera: ["TKTYNBA77AB3", "ZACFTLVD2LQS"],
+  coursera: ["TKTYNBA77AB3", "ZACFTLVD2LQS","QSBAJET294WK","LN95738EPH2D","C8TF7WFY8DGB","2HSNXD4M5QTD"],
   udemy: ["UC-23cd5fbd-52b1-4c2b-b21b-c795fcecf3e7"],
   aws: ["AWSCERT1", "CLOUD202"],
   microsoft: ["MSFT123", "AZURE456"],
